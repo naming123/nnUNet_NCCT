@@ -72,7 +72,7 @@ from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 from nnunetv2.training.loss.compound_losses import KD_MSE_loss
 # from torch.utils.tensorboard import SummaryWriter
 
-class KDTrainer_MSE_as_T1(nnUNetTrainer):
+class KDTrainer_MSE_osm_t2(nnUNetTrainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         # From https://grugbrain.dev/. Worth a read ya big brains ;-)
@@ -1056,14 +1056,33 @@ class KDTrainer_MSE_as_T1(nnUNetTrainer):
         with autocast(self.device.type, enabled=True) if self.device.type == 'cuda' else dummy_context():
             # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
             with torch.no_grad():
-                temp_teacher_output = self.teacher_network(data_1)           # CECT
+                temp_teacher_output = self.teacher_network(data_1) 
+                # print("t############################################")
+
+                # print(len(temp_teacher_output))          # CECT
+                # print(temp_teacher_output[0].shape)          # CECT
                 teacher_output = temp_teacher_output[1]
+                # print(teacher_output.shape)
             # Forward pass with the student model
             temp_student_output = self.network(data_0)                       # NCCT
+            
+            temp_teacher_output = temp_teacher_output[:,1,...]
+            temp_student_output[:,1,...] = temp_student_output[:,1,...] + temp_teacher_output
+            # print("s############################################")
+            # print(len(temp_student_output))          # CECT
+            # print(temp_student_output[0].shape)          # CECT
             student_output = temp_student_output[1]
-
-            student_l = self.loss(student_output, target)               # DC_CE_loss(student network output, gt label)
-            teacher_l = self.t_loss(student_output, teacher_output)     # MSE loss
+            # print(student_output.shape)
+            # print(self.loss)            # DC_CE_loss(student network output, gt label)
+            # print(self.t_loss)
+            # print(len(target))
+            # print(target[0].shape)
+            # print(torch.unique(target[0]))
+            # temp_target = target[1]
+            student_l = self.loss(temp_student_output, target)   
+            # print("student_l", student_l)
+            teacher_l = self.t_loss([student_output], [teacher_output])     # MSE loss
+            # print("teacher_l", teacher_l)
             
             # Weight needs to be adjusted
             student_weight = 0.75
@@ -1125,8 +1144,8 @@ class KDTrainer_MSE_as_T1(nnUNetTrainer):
 
         # we only need the output with the highest output resolution (if DS enabled)
         if self.enable_deep_supervision:
-            output = output
-            target = target
+            output = output[0]
+            target = target[0]
 
         # the following is needed for online evaluation. Fake dice (green line)
         axes = [0] + list(range(2, output.ndim))

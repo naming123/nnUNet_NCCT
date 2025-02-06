@@ -202,6 +202,24 @@ class KD_KLDiv_loss(nn.Module):
         # Check the loss
         return result
     
+class KD_KLDiv_loss(nn.Module):
+    def __init__(self, reduction  = 'mean', temperature = 2):
+        super(KD_KLDiv_loss, self).__init__()
+        
+        self.reduction = reduction
+        self.temperature = temperature
+        self.kldiv_loss = nn.KLDivLoss(reduction=reduction, log_target=True)
+
+    def forward(self, net_output: torch.Tensor, target: torch.Tensor):
+        T = self.temperature
+        teacher_output = nn.functional.log_softmax(target/T, dim=1)
+        student_output = nn.functional.log_softmax(net_output/T, dim=1)
+        
+        result = self.kldiv_loss(student_output, teacher_output) * (T**2)
+
+        # Check the loss
+        return result
+    
 class KD_CE_loss(nn.Module):
     def __init__(self, reduction = 'mean', temperature = 2):
         super(KD_CE_loss, self).__init__()

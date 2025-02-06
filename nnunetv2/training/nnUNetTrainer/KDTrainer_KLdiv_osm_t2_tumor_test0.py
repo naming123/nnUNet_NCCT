@@ -81,7 +81,7 @@ from threadpoolctl import threadpool_limits
 # -> use KLDiv Loss
 # not working...
 
-class KDTrainer_KLdiv_osm_t2(nnUNetTrainer):
+class KDTrainer_KLdiv_osm_t2_tumor_test0(nnUNetTrainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         # From https://grugbrain.dev/. Worth a read ya big brains ;-)
@@ -1053,6 +1053,7 @@ class KDTrainer_KLdiv_osm_t2(nnUNetTrainer):
         data_0 = data[:, 0:1, :, :, :]  # B x 1 x D x W x H, NCCT, for student training
         data_1 = data[:, 1:2, :, :, :]  # B x 1 x D x W x H, CECT, for teacher validation
         
+
         data_0 = data_0.to(self.device, non_blocking=True)
         data_1 = data_1.to(self.device, non_blocking=True)
         
@@ -1067,14 +1068,16 @@ class KDTrainer_KLdiv_osm_t2(nnUNetTrainer):
             # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
             with torch.no_grad():
                 temp_teacher_output = self.teacher_network(data_1)          # CECT
-                teacher_output = temp_teacher_output[1]
+                teacher_output = temp_teacher_output[0]
+                tumor_t = teacher_output[:, 2:, :, :, :]  # B x 1 x D x W x H, CECT tumor만 뽑을거다.
             # Forward pass with the student model
             temp_student_output = self.network(data_0)                       # NCCT
-            student_output = temp_student_output[1]
+            student_output = temp_student_output[0]
+            tumor_s = student_output[:, 2:, :, :, :]  # B x 1 x D x W x H, CECT tumor만 뽑을거다.
             
             # temp_target = target[1]
             student_l = self.loss(temp_student_output, target)               # DC_CE_loss(student network output, gt label)
-            teacher_l = self.t_loss([student_output], [teacher_output])     # KLDiv loss
+            teacher_l = self.t_loss([tumor_s], [tumor_t])     # KLDiv loss
             
             # Weight needs to be adjusted
             student_weight = 0.75
@@ -1528,7 +1531,7 @@ class KDTrainer_KLdiv_osm_t2(nnUNetTrainer):
 #         if self.transforms is not None:
 #             with torch.no_grad():
 #                 with threadpool_limits(limits=1, user_api=None):
-#                     data_all = torch.from_numpy(data_all).float()
+#                     data_all = torch.from_torch form(data_all).float()
 #                     seg_all = torch.from_numpy(seg_all).to(torch.int16)
 #                     images = []
 #                     segs = []
